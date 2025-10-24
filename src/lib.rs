@@ -81,4 +81,38 @@ pub fn new_window_in_canvas(event_loop: &ActiveEventLoop, canvas_id: &'static st
 //     }
 // }
 
+/// Fetch the bytes of a file. Returns None if an error occurred
+/// 
+/// # Panics
+/// when targeting WASM, panics if the file path is not found
+pub async fn fetch_bytes(path: &str) -> Option<Vec<u8>> {
+    #[cfg(not(target_arch = "wasm32"))] 
+    {
+        if let Ok(bytes) = std::fs::read(path) {
+            Some(bytes)
+        } else {
+            None
+        }
+
+    }
+    
+    #[cfg(target_arch = "wasm32")] 
+    {
+        let Ok(js_future) = JsFuture::from(web_sys::window()?.fetch_with_str(path)).await 
+            else {return None};
+
+        let Ok(response) = js_future.dyn_into::<Response>()
+            else {return None};
+
+        let Ok(array_buf) = response.array_buffer()
+            else {return None};
+
+        let Ok(array_buf) = JsFuture::from(array_buf).await 
+            else {return None};
+
+        let typed_arr = js_sys::Uint8Array::new(&array_buf);
+
+        Some(typed_arr.to_vec())
+    }
+}
 
